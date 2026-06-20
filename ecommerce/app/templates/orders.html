@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Orders - ShopKart</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  {% include "_header.html" %}
+
+  <div class="container" style="padding-top:24px; max-width:800px;">
+    <div class="section-title">Your orders</div>
+    <div id="orders-list">
+      <div class="skeleton" style="height:100px; margin-bottom:12px;"></div>
+    </div>
+  </div>
+
+  {% include "_footer.html" %}
+
+  <script src="/static/js/app.js"></script>
+  <script>
+    if (!Auth.isLoggedIn()) {
+      window.location.href = "/login?next=/orders";
+    }
+
+    const statusColors = {
+      pending: "var(--warn)",
+      paid: "var(--success)",
+      shipped: "#378ADD",
+      delivered: "var(--success)",
+      cancelled: "var(--brand)",
+    };
+
+    async function loadOrders() {
+      const wrap = document.getElementById("orders-list");
+      try {
+        const orders = await api("/api/orders", { auth: true });
+        if (orders.length === 0) {
+          wrap.innerHTML = `<div class="empty-state"><i class="ti ti-package-off"></i><p>You haven't placed any orders yet.</p><a href="/" class="btn btn-primary" style="margin-top:10px; display:inline-flex;">Start shopping</a></div>`;
+          return;
+        }
+        wrap.innerHTML = orders.map(o => `
+          <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <p style="font-weight:700; font-size:13px; margin:0;">Order #${o.id}</p>
+                <p style="font-size:12px; color:var(--ink-faint); margin:2px 0 0;">${new Date(o.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}</p>
+              </div>
+              <span style="font-size:12px; font-weight:700; color:${statusColors[o.status] || 'var(--ink)'}; text-transform:capitalize;">${o.status}</span>
+            </div>
+            ${o.items.map(item => `
+              <div style="display:flex; gap:12px; align-items:center; padding:8px 0; border-top:1px solid var(--border);">
+                <img src="${item.image_snapshot}" style="width:50px; height:50px; object-fit:cover; border-radius:6px;" />
+                <div style="flex:1;">
+                  <p style="font-size:13px; margin:0;">${escapeHTML(item.title_snapshot)}</p>
+                  <p style="font-size:12px; color:var(--ink-faint); margin:2px 0 0;">Qty: ${item.quantity}</p>
+                </div>
+                <p style="font-size:13px; font-weight:700; margin:0;">${formatINR(item.price_snapshot * item.quantity)}</p>
+              </div>
+            `).join("")}
+            <div style="text-align:right; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+              <span style="font-size:13px; font-weight:800;">Total: ${formatINR(o.total_amount)}</span>
+            </div>
+          </div>
+        `).join("");
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+      }
+    }
+
+    loadOrders();
+  </script>
+</body>
+</html>

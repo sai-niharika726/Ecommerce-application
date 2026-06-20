@@ -1,0 +1,47 @@
+<div class="topbar">
+  <div class="container">
+    <span><i class="ti ti-map-pin" style="font-size:13px; vertical-align:-2px;"></i> Deliver to Hyderabad 500001</span>
+    <span>
+      <a href="/orders">Track order</a>
+      <a href="#">Help</a>
+    </span>
+  </div>
+</div>
+
+<header class="header">
+  <div class="container">
+    <a href="/" class="logo">
+      shopkart
+    </a>
+
+    <nav class="nav-links">
+      <a href="/?category=men">Men</a>
+      <a href="/?category=women">Women</a>
+      <a href="/?category=electronics">Electronics</a>
+      <a href="/?category=footwear">Footwear</a>
+      <a href="/?category=home">Home</a>
+      <a href="/?category=beauty">Beauty</a>
+    </nav>
+
+    <form class="search-box" onsubmit="event.preventDefault(); window.location.href = '/?q=' + encodeURIComponent(this.q.value);">
+      <i class="ti ti-search"></i>
+      <input name="q" placeholder="Search for products, brands and more" autocomplete="off" />
+    </form>
+
+    <div class="header-actions">
+      <a href="/login" class="action" id="account-action">
+        <i class="ti ti-user"></i>
+        <span>Login</span>
+      </a>
+      <a href="/orders" class="action">
+        <i class="ti ti-package"></i>
+        <span>Orders</span>
+      </a>
+      <a href="/cart" class="action">
+        <i class="ti ti-shopping-cart"></i>
+        <span>Cart</span>
+        <span class="cart-badge">0</span>
+      </a>
+    </div>
+  </div>
+</header>

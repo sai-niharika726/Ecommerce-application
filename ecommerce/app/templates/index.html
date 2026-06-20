@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopKart - Online Shopping for Fashion, Electronics & More</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  {% include "_header.html" %}
+
+  <div class="category-strip">
+    <div class="container" id="category-strip">
+      <a href="/" class="active"><i class="ti ti-apps"></i> All</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="hero" id="hero-banner">
+      <div>
+        <p class="eyebrow">END OF SEASON SALE</p>
+        <h1>Up to 70% off</h1>
+        <p>Fashion, electronics &amp; home essentials — refreshed every week.</p>
+        <button onclick="document.getElementById('products-section').scrollIntoView({behavior:'smooth'})">Shop now</button>
+      </div>
+      <i class="ti ti-shopping-bag hero-icon"></i>
+    </div>
+
+    <div class="section-title" id="products-section">
+      <span id="section-heading">Trending now</span>
+      <span class="sub" id="result-count"></span>
+    </div>
+
+    <div class="product-grid" id="product-grid">
+      <div class="skeleton" style="height:340px;"></div>
+      <div class="skeleton" style="height:340px;"></div>
+      <div class="skeleton" style="height:340px;"></div>
+      <div class="skeleton" style="height:340px;"></div>
+    </div>
+  </div>
+
+  {% include "_footer.html" %}
+
+  <script src="/static/js/app.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const qParam = params.get("q") || "";
+    const categoryParam = params.get("category") || "";
+
+    async function loadCategories() {
+      try {
+        const categories = await api("/api/categories");
+        const strip = document.getElementById("category-strip");
+        strip.innerHTML = `<a href="/" class="${!categoryParam ? 'active' : ''}"><i class="ti ti-apps"></i> All</a>` +
+          categories.map(c => `
+            <a href="/?category=${c.slug}" class="${categoryParam === c.slug ? 'active' : ''}">
+              <i class="ti ${c.icon}"></i> ${escapeHTML(c.name)}
+            </a>
+          `).join("");
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadProducts() {
+      const grid = document.getElementById("product-grid");
+      const heading = document.getElementById("section-heading");
+      const resultCount = document.getElementById("result-count");
+
+      let url = "/api/products?limit=24";
+      if (qParam) url += "&q=" + encodeURIComponent(qParam);
+      if (categoryParam) url += "&category=" + encodeURIComponent(categoryParam);
+
+      if (qParam) heading.textContent = `Results for "${qParam}"`;
+      else if (categoryParam) heading.textContent = categoryParam.charAt(0).toUpperCase() + categoryParam.slice(1);
+      else heading.textContent = "Trending now";
+
+      try {
+        const products = await api(url);
+        resultCount.textContent = `${products.length} items`;
+        if (products.length === 0) {
+          grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
+            <i class="ti ti-mood-sad"></i>
+            <p>No products found. Try a different search or category.</p>
+          </div>`;
+          return;
+        }
+        grid.innerHTML = products.map(productCardHTML).join("");
+      } catch (e) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><p>Could not load products. ${e.message}</p></div>`;
+      }
+    }
+
+    loadCategories();
+    loadProducts();
+  </script>
+</body>
+</html>

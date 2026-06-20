@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - ShopKart</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; }
+    th, td { text-align:left; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--border); }
+    th { background:#fafafa; font-weight:700; color:var(--ink-light); }
+    .admin-tabs { display:flex; gap:8px; margin-bottom:18px; }
+    .admin-tabs button { padding:8px 16px; border-radius:6px; border:1px solid var(--border); background:#fff; font-size:13px; font-weight:700; }
+    .admin-tabs button.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+  </style>
+</head>
+<body>
+
+  {% include "_header.html" %}
+
+  <div class="container" style="padding-top:24px;">
+    <div class="section-title">Admin panel</div>
+
+    <div id="gate" class="empty-state" style="display:none;">
+      <i class="ti ti-lock"></i>
+      <p>Admin access required. <a href="/login" style="color:var(--brand); font-weight:700;">Log in as admin</a>.</p>
+    </div>
+
+    <div id="admin-content" style="display:none;">
+      <div class="admin-tabs">
+        <button class="active" onclick="switchTab('products')" id="tab-products">Products</button>
+        <button onclick="switchTab('orders')" id="tab-orders">Orders</button>
+        <button onclick="switchTab('add')" id="tab-add">Add product</button>
+      </div>
+
+      <div id="panel-products">
+        <table>
+          <thead><tr><th>Image</th><th>Title</th><th>Brand</th><th>Price</th><th>Stock</th><th>Active</th><th></th></tr></thead>
+          <tbody id="products-table-body"></tbody>
+        </table>
+      </div>
+
+      <div id="panel-orders" style="display:none;">
+        <table>
+          <thead><tr><th>Order ID</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
+          <tbody id="orders-table-body"></tbody>
+        </table>
+      </div>
+
+      <div id="panel-add" style="display:none; max-width:480px;">
+        <div class="form-error" id="add-error"></div>
+        <div class="form-field"><label>Title</label><input id="np-title" /></div>
+        <div class="form-field"><label>Brand</label><input id="np-brand" /></div>
+        <div class="form-field"><label>Description</label><textarea id="np-desc" rows="3"></textarea></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-field"><label>Price (₹)</label><input id="np-price" type="number" /></div>
+          <div class="form-field"><label>MRP (₹)</label><input id="np-mrp" type="number" /></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-field"><label>Stock</label><input id="np-stock" type="number" value="100" /></div>
+          <div class="form-field"><label>Category</label>
+            <select id="np-category"></select>
+          </div>
+        </div>
+        <div class="form-field"><label>Image URL</label><input id="np-image" placeholder="https://..." /></div>
+        <button class="btn btn-primary" onclick="createProduct()">Create product</button>
+      </div>
+    </div>
+  </div>
+
+  {% include "_footer.html" %}
+
+  <script src="/static/js/app.js"></script>
+  <script>
+    function switchTab(name) {
+      ["products", "orders", "add"].forEach(t => {
+        document.getElementById(`panel-${t}`).style.display = t === name ? "block" : "none";
+        document.getElementById(`tab-${t}`).classList.toggle("active", t === name);
+      });
+    }
+
+    async function checkAdmin() {
+      if (!Auth.isLoggedIn()) {
+        document.getElementById("gate").style.display = "block";
+        return false;
+      }
+      try {
+        const me = await api("/api/auth/me", { auth: true });
+        if (!me.is_admin) {
+          document.getElementById("gate").style.display = "block";
+          return false;
+        }
+        document.getElementById("admin-content").style.display = "block";
+        return true;
+      } catch (e) {
+        document.getElementById("gate").style.display = "block";
+        return false;
+      }
+    }
+
+    async function loadProductsTable() {
+      const tbody = document.getElementById("products-table-body");
+      const products = await api("/api/admin/products", { auth: true });
+      tbody.innerHTML = products.map(p => `
+        <tr>
+          <td><img src="${p.image_url}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;" /></td>
+          <td>${escapeHTML(p.title)}</td>
+          <td>${escapeHTML(p.brand)}</td>
+          <td>${formatINR(p.price)}</td>
+          <td>${p.stock}</td>
+          <td>${p.is_active ? "Yes" : "No"}</td>
+          <td><button class="btn btn-secondary" onclick="deleteProduct(${p.id})"><i class="ti ti-trash"></i></button></td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadOrdersTable() {
+      const tbody = document.getElementById("orders-table-body");
+      const orders = await api("/api/admin/orders", { auth: true });
+      tbody.innerHTML = orders.map(o => `
+        <tr>
+          <td>#${o.id}</td>
+          <td style="text-transform:capitalize;">${o.status}</td>
+          <td>${formatINR(o.total_amount)}</td>
+          <td>${new Date(o.created_at).toLocaleDateString("en-IN")}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadCategoryOptions() {
+      const select = document.getElementById("np-category");
+      const categories = await api("/api/categories");
+      select.innerHTML = categories.map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join("");
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm("Delete this product?")) return;
+      try {
+        await api(`/api/admin/products/${id}`, { method: "DELETE", auth: true });
+        showToast("Product deleted");
+        loadProductsTable();
+      } catch (e) {
+        showToast(e.message);
+      }
+    }
+
+    async function createProduct() {
+      const errBox = document.getElementById("add-error");
+      errBox.style.display = "none";
+      const payload = {
+        title: document.getElementById("np-title").value.trim(),
+        brand: document.getElementById("np-brand").value.trim(),
+        description: document.getElementById("np-desc").value.trim(),
+        price: parseFloat(document.getElementById("np-price").value),
+        mrp: parseFloat(document.getElementById("np-mrp").value),
+        stock: parseInt(document.getElementById("np-stock").value) || 0,
+        category_id: parseInt(document.getElementById("np-category").value),
+        image_url: document.getElementById("np-image").value.trim(),
+      };
+      if (!payload.title || !payload.image_url || !payload.price || !payload.mrp) {
+        errBox.textContent = "Please fill in title, price, MRP, and image URL.";
+        errBox.style.display = "block";
+        return;
+      }
+      try {
+        await api("/api/admin/products", { method: "POST", auth: true, body: payload });
+        showToast("Product created");
+        switchTab("products");
+        loadProductsTable();
+      } catch (e) {
+        errBox.textContent = e.message;
+        errBox.style.display = "block";
+      }
+    }
+
+    (async () => {
+      const ok = await checkAdmin();
+      if (ok) {
+        loadProductsTable();
+        loadOrdersTable();
+        loadCategoryOptions();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checkout - ShopKart</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  {% include "_header.html" %}
+
+  <div class="container" style="padding-top:24px; max-width:760px;">
+    <div class="section-title">Checkout</div>
+
+    <div id="address-section">
+      <div class="skeleton" style="height:120px;"></div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; margin-top:20px;">
+      <h3 style="font-size:14px; margin:0 0 14px;">Add a new address</h3>
+      <div id="address-error" class="form-error"></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+        <div class="form-field"><label>Full name</label><input id="addr-name" /></div>
+        <div class="form-field"><label>Phone</label><input id="addr-phone" /></div>
+        <div class="form-field" style="grid-column:1/-1;"><label>Address line 1</label><input id="addr-line1" /></div>
+        <div class="form-field" style="grid-column:1/-1;"><label>Address line 2 (optional)</label><input id="addr-line2" /></div>
+        <div class="form-field"><label>City</label><input id="addr-city" /></div>
+        <div class="form-field"><label>State</label><input id="addr-state" /></div>
+        <div class="form-field"><label>Pincode</label><input id="addr-pincode" /></div>
+      </div>
+      <button class="btn btn-secondary" onclick="saveAddress()">Save address</button>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; margin-top:20px;">
+      <div class="summary-row total"><span>Order total</span><span id="order-total">₹0</span></div>
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" onclick="placeOrder()">
+        <i class="ti ti-lock"></i> Place order
+      </button>
+    </div>
+  </div>
+
+  {% include "_footer.html" %}
+
+  <script src="/static/js/app.js"></script>
+  <script>
+    if (!Auth.isLoggedIn()) {
+      window.location.href = "/login?next=/checkout";
+    }
+
+    let selectedAddressId = null;
+
+    async function loadAddresses() {
+      const wrap = document.getElementById("address-section");
+      try {
+        const addresses = await api("/api/addresses", { auth: true });
+        if (addresses.length === 0) {
+          wrap.innerHTML = `<div class="empty-state"><i class="ti ti-map-pin-off"></i><p>No saved addresses. Add one below.</p></div>`;
+          return;
+        }
+        selectedAddressId = addresses.find(a => a.is_default)?.id || addresses[0].id;
+        wrap.innerHTML = addresses.map(a => `
+          <label style="display:flex; gap:12px; background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:10px; cursor:pointer;">
+            <input type="radio" name="address" value="${a.id}" ${a.id === selectedAddressId ? "checked" : ""} onchange="selectedAddressId=${a.id}" style="margin-top:3px;" />
+            <div>
+              <p style="font-weight:700; font-size:13px; margin:0 0 2px;">${escapeHTML(a.full_name)} &middot; ${escapeHTML(a.phone)}</p>
+              <p style="font-size:13px; color:var(--ink-light); margin:0;">${escapeHTML(a.line1)}, ${escapeHTML(a.line2)} ${escapeHTML(a.city)}, ${escapeHTML(a.state)} - ${escapeHTML(a.pincode)}</p>
+            </div>
+          </label>
+        `).join("");
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+      }
+    }
+
+    async function loadTotal() {
+      try {
+        const items = await api("/api/cart", { auth: true });
+        const total = items.reduce((sum, i) => sum + Number(i.product.price) * i.quantity, 0);
+        document.getElementById("order-total").textContent = formatINR(total);
+        if (items.length === 0) {
+          showToast("Your cart is empty");
+          setTimeout(() => window.location.href = "/", 1000);
+        }
+      } catch (e) {}
+    }
+
+    async function saveAddress() {
+      const errBox = document.getElementById("address-error");
+      errBox.style.display = "none";
+      const payload = {
+        full_name: document.getElementById("addr-name").value.trim(),
+        phone: document.getElementById("addr-phone").value.trim(),
+        line1: document.getElementById("addr-line1").value.trim(),
+        line2: document.getElementById("addr-line2").value.trim(),
+        city: document.getElementById("addr-city").value.trim(),
+        state: document.getElementById("addr-state").value.trim(),
+        pincode: document.getElementById("addr-pincode").value.trim(),
+        is_default: true,
+      };
+      if (!payload.full_name || !payload.phone || !payload.line1 || !payload.city || !payload.state || !payload.pincode) {
+        errBox.textContent = "Please fill all required fields.";
+        errBox.style.display = "block";
+        return;
+      }
+      try {
+        await api("/api/addresses", { method: "POST", auth: true, body: payload });
+        showToast("Address saved");
+        loadAddresses();
+      } catch (e) {
+        errBox.textContent = e.message;
+        errBox.style.display = "block";
+      }
+    }
+
+    async function placeOrder() {
+      if (!selectedAddressId) {
+        showToast("Please add or select a delivery address");
+        return;
+      }
+      try {
+        const order = await api("/api/checkout", { method: "POST", auth: true, body: { address_id: selectedAddressId } });
+        showToast("Order placed successfully");
+        refreshCartBadge();
+        setTimeout(() => window.location.href = "/orders", 800);
+      } catch (e) {
+        showToast(e.message);
+      }
+    }
+
+    loadAddresses();
+    loadTotal();
+  </script>
+</body>
+</html>

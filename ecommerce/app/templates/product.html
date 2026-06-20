@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product - ShopKart</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  {% include "_header.html" %}
+
+  <div class="container" style="padding-top:24px;">
+    <div id="product-detail">
+      <div class="skeleton" style="height:420px;"></div>
+    </div>
+
+    <div class="section-title">Ratings &amp; reviews</div>
+    <div id="reviews-section">
+      <div class="skeleton" style="height:120px; margin-bottom:24px;"></div>
+    </div>
+
+    <div class="section-title">You might also like</div>
+    <div class="product-grid" id="related-grid"></div>
+  </div>
+
+  {% include "_footer.html" %}
+
+  <script src="/static/js/app.js"></script>
+  <script>
+    const productId = {{ product_id }};
+
+    function starRow(rating) {
+      let html = "";
+      for (let i = 1; i <= 5; i++) {
+        html += `<i class="ti ${i <= Math.round(rating) ? 'ti-star-filled' : 'ti-star'}" style="font-size:14px; color:#ff9f00;"></i>`;
+      }
+      return html;
+    }
+
+    async function loadProduct() {
+      const wrap = document.getElementById("product-detail");
+      try {
+        const p = await api(`/api/products/${productId}`);
+        document.title = p.title + " - ShopKart";
+
+        wrap.innerHTML = `
+          <div style="display:grid; grid-template-columns: 440px 1fr; gap:40px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:28px;">
+            <div>
+              <div style="border:1px solid var(--border); border-radius:8px; overflow:hidden; height:440px;">
+                <img src="${p.image_url}" alt="${escapeHTML(p.title)}" style="width:100%; height:100%; object-fit:cover;" />
+              </div>
+            </div>
+            <div>
+              <p style="font-size:13px; color:var(--ink-light); font-weight:700; margin:0 0 4px;">${escapeHTML(p.brand)}</p>
+              <h1 style="font-size:22px; margin:0 0 10px; font-weight:700;">${escapeHTML(p.title)}</h1>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+                <span class="rating-pill">${Number(p.rating).toFixed(1)} <i class="ti ti-star-filled" style="font-size:9px"></i></span>
+                <span class="rating-count">${p.rating_count.toLocaleString("en-IN")} ratings</span>
+              </div>
+              <div class="product-price-row" style="margin-bottom:4px;">
+                <span class="price-now" style="font-size:26px;">${formatINR(p.price)}</span>
+                ${p.mrp > p.price ? `<span class="price-mrp">${formatINR(p.mrp)}</span>` : ""}
+                ${p.discount_percent > 0 ? `<span class="price-off">${p.discount_percent}% off</span>` : ""}
+              </div>
+              <p style="font-size:12px; color:var(--success); font-weight:700; margin:0 0 20px;">inclusive of all taxes</p>
+
+              <p style="font-size:14px; line-height:1.6; color:var(--ink-light); margin-bottom:24px;">${escapeHTML(p.description)}</p>
+
+              <p style="font-size:13px; margin-bottom:16px;">
+                ${p.stock > 0
+                  ? `<span style="color:var(--success); font-weight:700;"><i class="ti ti-check"></i> In stock</span> — ${p.stock} available`
+                  : `<span style="color:var(--brand); font-weight:700;">Out of stock</span>`}
+              </p>
+
+              <div style="display:flex; gap:12px;">
+                <button class="btn btn-primary" style="flex:1;" onclick="addToCart(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
+                  <i class="ti ti-shopping-cart-plus"></i> Add to cart
+                </button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="buyNow(${p.id})" ${p.stock <= 0 ? "disabled" : ""}>
+                  <i class="ti ti-bolt"></i> Buy now
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        loadReviews(p);
+        loadRelated(p);
+      } catch (e) {
+        wrap.innerHTML = `<div class="empty-state"><p>Product not found.</p></div>`;
+      }
+    }
+
+    async function buyNow(productId) {
+      await addToCart(productId);
+      window.location.href = "/cart";
+    }
+
+    async function loadReviews(product) {
+      const section = document.getElementById("reviews-section");
+      try {
+        const reviews = await api(`/api/products/${product.id}/reviews`);
+
+        const formHTML = Auth.isLoggedIn() ? `
+          <div style="background:#fff; border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:20px;">
+            <p style="font-weight:700; font-size:13px; margin:0 0 10px;">Write a review</p>
+            <div id="star-input" style="margin-bottom:10px; font-size:20px; cursor:pointer;"></div>
+            <textarea id="review-comment" rows="3" placeholder="Share your experience..." style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-family:inherit; font-size:13px;"></textarea>
+            <button class="btn btn-primary" style="margin-top:10px;" onclick="submitReview(${product.id})">Submit review</button>
+          </div>
+        ` : `<p style="font-size:13px; color:var(--ink-light); margin-bottom:20px;"><a href="/login" style="color:var(--brand); font-weight:700;">Log in</a> to write a review.</p>`;
+
+        const listHTML = reviews.length === 0
+          ? `<div class="empty-state"><i class="ti ti-message-circle"></i><p>No reviews yet. Be the first to review this product.</p></div>`
+          : reviews.map(r => `
+            <div style="border-bottom:1px solid var(--border); padding:14px 0;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                ${starRow(r.rating)}
+                <span style="font-weight:700; font-size:13px;">${escapeHTML(r.user_name)}</span>
+              </div>
+              <p style="font-size:13px; color:var(--ink-light); margin:0;">${escapeHTML(r.comment)}</p>
+            </div>
+          `).join("");
+
+        section.innerHTML = formHTML + listHTML;
+
+        if (Auth.isLoggedIn()) {
+          let selectedRating = 5;
+          const starInput = document.getElementById("star-input");
+          const renderStars = () => {
+            starInput.innerHTML = [1,2,3,4,5].map(i =>
+              `<i class="ti ${i <= selectedRating ? 'ti-star-filled' : 'ti-star'}" style="color:#ff9f00;" onclick="window._setRating(${i})"></i>`
+            ).join("");
+          };
+          window._setRating = (i) => { selectedRating = i; renderStars(); };
+          window._getRating = () => selectedRating;
+          renderStars();
+        }
+      } catch (e) {
+        section.innerHTML = "";
+      }
+    }
+
+    async function submitReview(productId) {
+      const comment = document.getElementById("review-comment").value;
+      const rating = window._getRating ? window._getRating() : 5;
+      try {
+        await api(`/api/products/${productId}/reviews`, {
+          method: "POST",
+          auth: true,
+          body: { rating, comment },
+        });
+        showToast("Review submitted");
+        loadProduct();
+      } catch (e) {
+        showToast(e.message);
+      }
+    }
+
+    async function loadRelated(product) {
+      const grid = document.getElementById("related-grid");
+      try {
+        const url = `/api/products?limit=4` + (product.category_id ? "" : "");
+        const products = await api(`/api/products?limit=8`);
+        const related = products.filter(p => p.id !== product.id).slice(0, 4);
+        grid.innerHTML = related.map(productCardHTML).join("");
+      } catch (e) {
+        grid.innerHTML = "";
+      }
+    }
+
+    loadProduct();
+  </script>
+</body>
+</html>
