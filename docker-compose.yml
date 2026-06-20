@@ -1,0 +1,37 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shopkart}
+      MYSQL_USER: ${MYSQL_USER:-shopkart}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-change_me_root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-shopkart}:${MYSQL_PASSWORD:-change_me}@db:3306/${MYSQL_DATABASE:-shopkart}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-me}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    ports:
+      - "8000:8000"
+
+volumes:
+  mysql_data:
